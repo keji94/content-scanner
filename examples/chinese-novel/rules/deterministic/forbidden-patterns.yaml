@@ -1,0 +1,33 @@
+# AIGC 痕迹检测：禁止句式 + 统计规则
+
+- id: D001
+  name: "禁止句式：不是...而是..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "不是[^。！？]{1,30}而是"
+  message: "检测到典型 AIGC 句式「不是...而是...」，建议改用更自然的表达"
+  applies_to: [all]
+
+- id: D002
+  name: "禁止句式：不仅...而且..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "不仅[^。！？]{1,30}而且"
+  message: "检测到典型 AIGC 句式「不仅...而且...」，建议改用更自然的表达"
+  applies_to: [all]
+
+- id: D016
+  name: "词汇丰富度过低 (TTR)"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: statistical
+  metric: ttr
+  threshold: 0.45
+  comparison: less_than
+  message: "文本词汇丰富度(TTR)过低，用词重复率高，建议增加用词多样性"
+  applies_to: [all]

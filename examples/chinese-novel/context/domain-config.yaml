@@ -1,0 +1,44 @@
+# 中文小说领域配置（最小可运行示例）
+# 所有字段均有默认值，此文件供领域覆盖
+
+domain_config:
+  text_units:
+    l1_separator: "。！？"
+    l2_separator: "\\n"
+    scan_unit: "l2"
+    locate_unit: "l1"
+
+  context:
+    recent_window: 3
+    max_key_facts: 50
+    max_information: 30
+    emotional_sample_rate: 3
+    enable_phase1_hints: true
+
+  scoring:
+    critical_weight: 10
+    warning_weight: 3
+    suggestion_weight: 1
+    grade_thresholds:
+      A: { min_score: 90, max_critical: 0, max_warning: 3 }
+      B: { min_score: 80, max_critical: 0, max_warning: 5 }
+      C: { min_score: 70, max_critical: 2 }
+      D: { min_score: 0, max_critical: 999 }
+    correlation_groups:
+      setting_integrity: []
+      character_behavior: []
+      readability: []
+
+  fix_loop:
+    max_rounds: 3
+    convergence:
+      critical: 0
+      warning: 3
+      score: 85
+    stagnation_delta: 2
+
+  self_learning:
+    upgrade_threshold: { times_applied: 10, effectiveness: 0.5 }
+    downgrade_threshold: { false_positive_rate: 0.3, times_applied: 5 }
+
+  fix_agent: "reviser"

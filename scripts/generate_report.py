@@ -40,7 +40,12 @@ def main():
     correlation_config = scoring_config.get("correlation_groups", {})
 
     with open(args.violations, "r", encoding="utf-8") as f:
-        violations = json.load(f)
+        data = json.load(f)
+    # Support both flat array and wrapped {"violations": [...]} format
+    if isinstance(data, dict):
+        violations = data.get("violations", [])
+    else:
+        violations = data
 
     with open(args.score, "r", encoding="utf-8") as f:
         score_result = json.load(f)
