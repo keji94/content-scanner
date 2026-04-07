@@ -31,3 +31,17 @@ context_mapping:
         track: true
         tentative_threshold: 0.7
         correction_strategy: override
+
+    - name: narrative_arc
+      type: list
+      max_size: 20
+      update_strategy: append
+      sample_rate: 3
+      confidence:
+        track: false
+
+    - name: entity_mentions
+      type: dict
+      update_strategy: merge
+      confidence:
+        track: false

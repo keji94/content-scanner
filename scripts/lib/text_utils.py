@@ -1,18 +1,56 @@
 """Text splitting utilities for content scanner.
 
 Splits text into L1 (sentence) and L2 (paragraph) units based on domain config.
+Also provides schema version checking for workspace compatibility.
 """
 
 import re
+import sys
 from typing import Any
+
+SCANNER_VERSION = "2.1"
+
+
+def check_schema_version(config: dict[str, Any]) -> None:
+    """Check workspace schema version against scanner version.
+
+    Rules:
+    - Major version mismatch → error exit
+    - Minor version workspace > scanner → warning
+    - Missing schema_version → assume "2.0"
+    """
+    declared = config.get("schema_version", "2.0")
+    try:
+        s_major, s_minor = SCANNER_VERSION.split(".")
+        d_major, d_minor = declared.split(".")
+    except ValueError:
+        print(f"WARNING: Invalid schema_version '{declared}', expected 'MAJOR.MINOR'",
+              file=sys.stderr)
+        return
+
+    if d_major != s_major:
+        print(f"ERROR: Schema version mismatch. Scanner={SCANNER_VERSION}, "
+              f"Workspace={declared}. Major version must match.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    if int(d_minor) > int(s_minor):
+        print(f"WARNING: Workspace uses newer schema features. "
+              f"Scanner={SCANNER_VERSION}, Workspace={declared}",
+              file=sys.stderr)
 
 
 def load_config(config_path: str) -> dict[str, Any]:
-    """Load domain-config.yaml and return the domain_config section."""
+    """Load domain-config.yaml and return the domain_config section.
+
+    Also checks schema version compatibility.
+    """
     import yaml
     with open(config_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    return data.get("domain_config", data)
+    config = data.get("domain_config", data)
+    check_schema_version(config)
+    return config
 
 
 def get_separators(config: dict[str, Any]) -> tuple[list[str], str]:

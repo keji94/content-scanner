@@ -187,10 +187,12 @@ python3 $SCRIPTS_DIR/prepare_phase2_unit.py \
   --context-json $TMP/context.json \
   --phase1-violations $TMP/phase1_violations.json \
   --config $DOMAIN_CFG \
-  --unit-index <N>
+  --unit-index <N> \
+  --rules-dir $WORKSPACE/rules/llm \
+  --learned-dir $WORKSPACE/rules/learned
 ```
 
-输出六部分 prompt 结构：
+输出 prompt 结构（含规则分批）：
 ```json
 {
   "system_prompt": "扫描器角色 + 当前位置",
@@ -198,15 +200,31 @@ python3 $SCRIPTS_DIR/prepare_phase2_unit.py \
   "domain_context": "领域上下文源内容",
   "phase1_hints": "Phase 1 提示（仅当该单元有违规时）",
   "content": "当前待检查段落文本",
-  "output_format": "JSON 数组格式要求"
+  "output_format": "JSON 数组格式要求",
+  "rule_batches": [
+    {"batch_label": "critical_checks", "priority": "critical", "rules": [{id, name, check_prompt}]},
+    {"batch_label": "warning_checks", "priority": "warning", "rules": [...]},
+    {"batch_label": "suggestion_checks", "priority": "suggestion", "rules": [...]}
+  ]
 }
 ```
 
-**ii. Agent 执行 LLM 语义判断**
+> 注：`rule_batches` 仅在传入 `--rules-dir` 时出现。旧 Agent 不传此参数时输出格式不变（向后兼容）。
 
-平台使用自身 LLM 能力，基于上述 prompt 结构做语义检查。
+**ii. Agent 执行 LLM 语义判断（分批协议）**
 
-加载的规则：
+当输出包含 `rule_batches` 时，按批次执行 LLM 检查：
+
+```
+FOR each batch in rule_batches:
+  1. 使用 batch.rules 中的规则检查当前段落
+  2. 返回该批次的违规 JSON 数组
+  3. 如果 skip_lower_priority_on_critical=true 且当前批次发现 critical 违规：
+     → 可跳过后续低优先级批次（优化）
+  4. 收集所有批次违规到 llm_violations[]
+```
+
+当 `rule_batches` 不存在时（向后兼容），回退到加载所有规则一次检查：
 - `rules/llm/*.yaml` 中的 LLM 规则
 - `rules/learned/*.yaml` 中 status 为 active 的学习规则
 
@@ -405,7 +423,7 @@ Round 3+: 上报用户决策
 |------|-------------|--------|--------|
 | 1 | 文本分片 | `split_text.py --input --config` | `{l1_units, l2_units, metadata}` |
 | 2 | Phase 1 确定性检查 | `run_deterministic.py --input --rules-dir --config --genre` | `{violations[], summary}` |
-| 3 | Phase 2 逐段 LLM 深检 | Agent LLM 判断 + `prepare_phase2_unit.py` + `update_context.py` | `llm_violations[]` |
+| 3 | Phase 2 逐段 LLM 深检 | Agent LLM 分批判断 + `prepare_phase2_unit.py --rules-dir` + `update_context.py` | `llm_violations[]` |
 | 4 | 合并违规 + 评分 | `calculate_score.py --violations --config` | `{score, grade, deduction}` |
 | 5 | 生成报告 | `generate_report.py --violations --score --split --config` | 完整报告 JSON |
 

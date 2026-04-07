@@ -1,6 +1,8 @@
 # 中文小说领域配置（最小可运行示例）
 # 所有字段均有默认值，此文件供领域覆盖
 
+schema_version: "2.1"
+
 domain_config:
   text_units:
     l1_separator: "。！？"
@@ -14,6 +16,10 @@ domain_config:
     max_information: 30
     emotional_sample_rate: 3
     enable_phase1_hints: true
+    compression:
+      enabled: true
+      strategy: summarize
+      summarize_at: 0.8
 
   scoring:
     critical_weight: 10
@@ -40,5 +46,10 @@ domain_config:
   self_learning:
     upgrade_threshold: { times_applied: 10, effectiveness: 0.5 }
     downgrade_threshold: { false_positive_rate: 0.3, times_applied: 5 }
+
+  rule_filtering:
+    enabled: true
+    max_rules_per_batch: 8
+    skip_lower_priority_on_critical: true
 
   fix_agent: "reviser"

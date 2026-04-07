@@ -87,15 +87,24 @@ python3 $SCRIPTS_DIR/prepare_phase2_unit.py \
   --context-json $TMP/context.json \
   --phase1-violations $TMP/phase1_violations.json \
   --config <workspace_path>/context/domain-config.yaml \
-  --unit-index <N>
+  --unit-index <N> \
+  --rules-dir <workspace_path>/rules/llm \
+  --learned-dir <workspace_path>/rules/learned
 ```
 
-**ii. LLM semantic check:**
-- Read the output — it provides system_prompt, context, phase1_hints, content, output_format
+**ii. LLM semantic check (batched):**
+
+The output contains `rule_batches` — an array of batches ordered by priority (critical → warning → suggestion). Each batch has `{batch_label, priority, rules}`.
+
+For each batch in `rule_batches`:
+1. Use **your own LLM reasoning** to check the paragraph content against the rules in this batch
+2. Return a JSON array of violations (or empty array if none)
+3. **Early exit optimization**: If `rule_filtering.skip_lower_priority_on_critical` is true and the current batch found critical violations, you MAY skip remaining lower-priority batches for this paragraph
+
+If `rule_batches` is absent (backward compat), fall back to loading rules manually:
 - Read LLM rules from `<workspace_path>/rules/llm/*.yaml`
-- Read active learned rules from `<workspace_path>/rules/learned/*.yaml` (status: active only)
-- Use **your own LLM reasoning** to check the content against these rules
-- Return a JSON array of violations (or empty array if none)
+- Read active learned rules from `<workspace_path>/rules/learned/*.yaml`
+- Check all rules in a single pass
 
 **iii. Extract context and update:**
 - Extract key_facts, character_states, information_revealed from the paragraph
@@ -144,11 +153,21 @@ Present the report to the user with grade, score, and top issues.
 If score < convergence.score:
 1. Present findings to user
 2. On user approval, apply fixes (via fix_agent or inline editing)
-3. Re-run Steps 1-5
-4. Track rounds against `fix_loop.max_rounds` (default 3)
-5. Stagnation detection: if score delta <= stagnation_delta, warn user and ask whether to continue
+3. Identify which paragraphs were modified (diff the content)
+4. **Round 1**: Full re-scan (Steps 1-5)
+5. **Round 2+**: Selective re-scan:
+   - Phase 1: Always full re-scan (chapter-level statistics)
+   - Phase 2: Only re-check `affected_paragraphs = modified ± 1`
+   - Use `--affected-paragraphs` flag on prepare_phase2_unit.py
+   - Use `--baseline-violations` + `--affected-paragraphs` on calculate_score.py for diff scoring
+6. Track rounds against `fix_loop.max_rounds` (default 3)
+7. Stagnation detection: if score delta <= stagnation_delta, warn user and ask whether to continue
 
 Convergence: `critical == 0 AND warning <= convergence.warning AND score >= convergence.score`
+
+## Upstream Integration
+
+For upstream Agent integration guide, see `UPSTREAM.md` — calling interfaces, output JSON schemas, fix loop orchestration protocol, and error handling.
 
 ## AIGC Harness
 

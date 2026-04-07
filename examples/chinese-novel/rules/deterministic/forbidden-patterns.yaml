@@ -20,6 +20,66 @@
   message: "检测到典型 AIGC 句式「不仅...而且...」，建议改用更自然的表达"
   applies_to: [all]
 
+- id: D003
+  name: "禁止句式：一方面...另一方面..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "一方面[^。！？]{1,30}另一方面"
+  message: "检测到典型 AIGC 句式「一方面...另一方面...」，建议拆分或改写"
+  applies_to: [all]
+
+- id: D004
+  name: "禁止句式：值得注意的是..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "值得注意"
+  message: "检测到典型 AIGC 套话「值得注意的是」，建议删除或换说法"
+  applies_to: [all]
+
+- id: D005
+  name: "禁止句式：需要指出的是..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "需要指出的是"
+  message: "检测到典型 AIGC 套话「需要指出的是」，建议删除或换说法"
+  applies_to: [all]
+
+- id: D006
+  name: "禁止句式：总而言之/综上所述"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(总而言之|综上所述|归根结底|毫无疑问)"
+  message: "检测到典型 AIGC 总结套话，建议用更自然的收束方式"
+  applies_to: [all]
+
+- id: D007
+  name: "AI 情绪套话：心中涌起/眸光一闪"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(心中涌起|眸光一闪|嘴角微扬|嘴角勾起|不禁.{0,4}一笑|一股.*涌上心头)"
+  message: "检测到典型 AI 网文情绪套话，建议用具体身体反应替代"
+  applies_to: [all]
+
+- id: D008
+  name: "AI 叙事套话：命运的齿轮"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(命运的齿轮|仿佛在诉说着|无声地宣告|悄然绽放|一切都在这一刻)"
+  message: "检测到典型 AI 叙事套话，建议换成更具体的描写"
+  applies_to: [all]
+
 - id: D016
   name: "词汇丰富度过低 (TTR)"
   severity: warning
@@ -30,4 +90,27 @@
   threshold: 0.45
   comparison: less_than
   message: "文本词汇丰富度(TTR)过低，用词重复率高，建议增加用词多样性"
+  applies_to: [all]
+
+- id: D017
+  name: "句长变化不足"
+  severity: suggestion
+  weight: 1
+  phase: 1
+  type: statistical
+  metric: sentence_length_std
+  threshold: 5.0
+  comparison: less_than
+  message: "句子长度标准差过小，句式节奏单一，建议长短句交替"
+  applies_to: [all]
+
+- id: D018
+  name: "段落过长"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: length_check
+  threshold: 300
+  min_violations: 2
+  message: "段落超过300字，建议拆分"
   applies_to: [all]

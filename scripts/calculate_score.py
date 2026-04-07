@@ -21,6 +21,13 @@ def main():
                         help="Path to violations JSON (all_violations from Phase 1 + 2)")
     parser.add_argument("--config", required=True,
                         help="Path to domain-config.yaml")
+    parser.add_argument("--baseline-violations", default=None,
+                        help="Path to previous round's violations for diff scoring. "
+                             "When provided, violations for affected paragraphs are "
+                             "replaced with new violations; unaffected violations are kept.")
+    parser.add_argument("--affected-paragraphs", default=None,
+                        help="Comma-separated paragraph indices that were modified. "
+                             "Only used with --baseline-violations.")
     args = parser.parse_args()
 
     domain_config = load_config(args.config)
@@ -34,6 +41,30 @@ def main():
         violations = data.get("violations", [])
     else:
         violations = data
+
+    # Diff scoring: merge baseline violations for unaffected paragraphs
+    if args.baseline_violations and args.affected_paragraphs:
+        affected_set = set(int(x.strip()) for x in args.affected_paragraphs.split(","))
+        with open(args.baseline_violations, "r", encoding="utf-8") as f:
+            baseline_data = json.load(f)
+        baseline_violations = (
+            baseline_data.get("violations", baseline_data)
+            if isinstance(baseline_data, dict)
+            else baseline_data
+        )
+        # Keep baseline violations for paragraphs NOT in affected_set
+        kept_baseline = [
+            v for v in baseline_violations
+            if isinstance(v, dict)
+            and v.get("location", {}).get("paragraph", -1) not in affected_set
+        ]
+        # Replace violations for affected paragraphs with new ones
+        new_affected = [
+            v for v in violations
+            if isinstance(v, dict)
+            and v.get("location", {}).get("paragraph", -1) in affected_set
+        ]
+        violations = kept_baseline + new_affected
 
     # Step 1: Assign correlation groups
     compute_correlation_groups(violations, correlation_config)

@@ -84,7 +84,7 @@ def update_context(
             _update_list_field(
                 cumulative, field_name, new_data,
                 max_size, track_confidence, tentative_threshold,
-                correction_strategy, unit_index,
+                correction_strategy, unit_index, domain_config,
             )
         elif ftype == "dict":
             _update_dict_field(
@@ -115,7 +115,7 @@ def _update_list_field(
     cumulative: dict, field_name: str, new_data: Any,
     max_size: int | None, track_confidence: bool,
     tentative_threshold: float, correction_strategy: str,
-    unit_index: int,
+    unit_index: int, domain_config: dict[str, Any] | None = None,
 ):
     """Update a list-type cumulative field with FIFO and confidence."""
     items = cumulative[field_name]
@@ -144,9 +144,11 @@ def _update_list_field(
 
         items.append(item)
 
-    # FIFO trimming
+    # FIFO trimming with optional compression
     if max_size and len(items) > max_size:
-        cumulative[field_name] = items[-max_size:]
+        cumulative[field_name] = _trim_list_field(
+            items, max_size, domain_config, field_name
+        )
 
 
 def _update_dict_field(
@@ -199,7 +201,7 @@ def _find_contradictory_list(
     """Check if new_item contradicts any existing item in a list field.
 
     Returns index of contradicted item, or None.
-    Simple heuristic: same field value content treated as same fact.
+    Uses entity-state pair extraction for improved accuracy.
     """
     new_text = new_item.get("fact", new_item.get("info", ""))
     if not new_text:
@@ -209,8 +211,6 @@ def _find_contradictory_list(
         ex_text = existing_item.get("fact", existing_item.get("info", ""))
         if not ex_text:
             continue
-        # Simple contradiction: same key terms but different content
-        # This is a heuristic; LLM (Phase 2) does better contradiction detection
         if _is_contradictory(new_text, ex_text):
             return i
 
@@ -218,24 +218,196 @@ def _find_contradictory_list(
 
 
 def _is_contradictory(text_a: str, text_b: str) -> bool:
-    """Simple contradiction heuristic for Chinese text.
+    """Entity-aware contradiction detection for Chinese text.
 
-    Checks if two texts about the same entity have different state descriptions.
-    This is intentionally conservative - only flags clear contradictions.
+    Strategy:
+    1. Extract entity-state pairs from both texts
+    2. If same entity has different states → contradiction
+    3. If one text refines the other (substring relationship) → not contradiction
+    4. Fall back to character overlap heuristic
     """
-    # Extract entity-state pairs using common patterns
-    # "角色A受伤" vs "角色A健康" → contradictory
-    # This is a simplified version; real contradiction detection is done by LLM
     if not text_a or not text_b:
         return False
 
-    # Overlap ratio: if texts share significant content, they might be about the same thing
+    # Same text → no contradiction
+    if text_a == text_b:
+        return False
+
+    # Refinement check: if one contains the other, it's a refinement not contradiction
+    # e.g., "受了重伤" is refined by "受了重伤，伤口已经溃烂"
+    shorter, longer = (text_a, text_b) if len(text_a) <= len(text_b) else (text_b, text_a)
+    if shorter in longer:
+        return False
+
+    # Entity-state extraction
+    pairs_a = _extract_entity_state_pairs(text_a)
+    pairs_b = _extract_entity_state_pairs(text_b)
+
+    if pairs_a and pairs_b:
+        # Check for same entity with contradictory states
+        for entity_a, state_a in pairs_a:
+            for entity_b, state_b in pairs_b:
+                if entity_a == entity_b and state_a != state_b:
+                    # Same entity, different states — check if truly contradictory
+                    if _states_are_opposite(state_a, state_b):
+                        return True
+        # Both have entity-state pairs but no opposing states → not contradictory
+        return False
+
+    # Fallback: character overlap heuristic (higher threshold to reduce false positives)
     chars_a = set(text_a)
     chars_b = set(text_b)
-    overlap = len(chars_a & chars_b) / min(len(chars_a), len(chars_b), 1)
+    denom = max(min(len(chars_a), len(chars_b)), 1)
+    overlap = len(chars_a & chars_b) / denom
 
-    # High overlap but different text → potential contradiction
-    if overlap > 0.7 and text_a != text_b:
+    if overlap > 0.8 and text_a != text_b:
         return True
+
+    return False
+
+
+def _extract_entity_state_pairs(text: str) -> list[tuple[str, str]]:
+    """Extract (entity, state) pairs from Chinese text using pattern matching.
+
+    Recognized patterns:
+    - "角色A受了重伤" → ("角色A", "受了重伤")
+    - "主角A处于愤怒状态" → ("主角A", "愤怒状态")
+    - "宝剑已获得" → ("宝剑", "已获得")
+    - "老者微微点头" → ("老者", "微微点头")
+    """
+    import re
+
+    pairs = []
+
+    # Pattern: {entity}{action_verb}{state}
+    # Action verbs that connect entity to state
+    action_patterns = [
+        r"(.{1,6}?)(受了|变成|变成了|处于|属于|位于|拥有|获得|失去了?|变成了?)(.{1,10})",
+        r"(.{1,6}?)(已经|已|正在|正)(.{1,10})",
+        r"(.{1,6}?)(微微|猛然|突然|渐渐|慢慢)(.{1,6})",
+        # State suffixes: {entity}{state_ending}
+        r"(.{1,6}?)(毫发无伤|安然无恙|精疲力竭|筋疲力尽|身受重伤|伤势加重|伤势恶化)",
+        r"(.{1,6}?)(站在|坐在|躺在|跪在|靠在)(.{1,10})",
+    ]
+
+    for pattern in action_patterns:
+        for match in re.finditer(pattern, text):
+            entity = match.group(1).strip()
+            # Handle patterns with 2 or 3 groups
+            if match.lastindex >= 3:
+                state = match.group(2) + match.group(3)
+            else:
+                state = match.group(2)
+            if entity and state and len(entity) >= 2:
+                pairs.append((entity, state))
+
+    return pairs
+
+
+def _trim_list_field(
+    items: list[dict], max_size: int,
+    domain_config: dict[str, Any] | None, field_name: str,
+) -> list[dict]:
+    """Trim a list field using compression or FIFO.
+
+    When domain_config has context.compression.enabled=true,
+    compresses old entries into summary items instead of dropping them.
+    Otherwise, uses simple FIFO trimming.
+    """
+    if domain_config is None:
+        return items[-max_size:]
+
+    compression_cfg = domain_config.get("context", {}).get("compression", {})
+    if not compression_cfg.get("enabled", False):
+        return items[-max_size:]
+
+    strategy = compression_cfg.get("strategy", "fifo")
+    if strategy != "summarize":
+        return items[-max_size:]
+
+    # Compression: merge oldest N items into a summary entry
+    summarize_at = compression_cfg.get("summarize_at", 0.8)
+    if len(items) <= max_size * summarize_at:
+        return items
+
+    # Compress the oldest third into a summary
+    n_to_compress = max(1, len(items) // 3)
+    to_compress = items[:n_to_compress]
+    remaining = items[n_to_compress:]
+
+    # Build a heuristic summary from the compressed items
+    compressed_facts = []
+    for item in to_compress:
+        text = item.get("fact", item.get("info", str(item)))
+        if text:
+            compressed_facts.append(text[:50])
+
+    summary_text = "；".join(compressed_facts)
+    if len(summary_text) > 200:
+        summary_text = summary_text[:197] + "..."
+
+    summary_entry = {
+        "type": "summary",
+        "original_count": len(to_compress),
+        "summary": summary_text,
+        "source_paragraph": to_compress[0].get("source_paragraph", 0),
+    }
+
+    result = [summary_entry] + remaining
+    # Final safety trim
+    if len(result) > max_size:
+        result = result[-max_size:]
+
+    return result
+
+
+# Opposite character pairs for Chinese state contradiction detection
+_OPPOSITE_PAIRS = [
+    ("有", "无"), ("得", "失"), ("生", "死"), ("重", "轻"),
+    ("进", "退"), ("上", "下"), ("内", "外"), ("安", "危"),
+    ("存", "亡"), ("成", "败"), ("开", "关"), ("起", "落"),
+    ("增", "减"), ("升", "降"), ("快", "慢"), ("强", "弱"),
+    ("好", "坏"), ("新", "旧"), ("来", "去"), ("出", "入"),
+    ("合", "分"), ("聚", "散"), ("攻", "守"), ("明", "暗"),
+]
+
+
+def _states_are_opposite(state_a: str, state_b: str) -> bool:
+    """Check if two state descriptions contain opposing semantics.
+
+    Returns True only if the states contain contradictory indicators
+    (e.g., "已获得" vs "已失去", "毫发无伤" vs "受了重伤").
+    Returns False for refinements (e.g., "受了重伤" vs "伤势加重").
+    """
+    # Check for opposite character pairs across the two states
+    for char_a in state_a:
+        for pos_char, neg_char in _OPPOSITE_PAIRS:
+            if char_a == pos_char and neg_char in state_b:
+                return True
+            if char_a == neg_char and pos_char in state_b:
+                return True
+
+    # Check for negation patterns: "无X" / "不X" / "未X" in one state,
+    # while the other state affirms X
+    import re
+    negation_patterns = [
+        (r"无(.{1,2})", "affirm"),
+        (r"不(.{1,2})", "affirm"),
+        (r"未(.{1,2})", "affirm"),
+        (r"没有(.{1,2})", "affirm"),
+    ]
+    for neg_pattern, _ in negation_patterns:
+        neg_match_a = re.search(neg_pattern, state_a)
+        neg_match_b = re.search(neg_pattern, state_b)
+        if neg_match_a and neg_match_a.group(1) in state_b:
+            return True
+        if neg_match_b and neg_match_b.group(1) in state_a:
+            return True
+
+    # Check for shared state keywords → likely refinement, not contradiction
+    state_keywords = {"痛", "怒", "喜", "悲", "惧", "累", "病", "弱", "勇"}
+    shared = state_keywords & set(state_a) & set(state_b)
+    if shared:
+        return False
 
     return False
