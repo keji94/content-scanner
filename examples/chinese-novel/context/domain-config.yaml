@@ -52,4 +52,13 @@ domain_config:
     max_rules_per_batch: 8
     skip_lower_priority_on_critical: true
 
+  # 多读者视角审核 (Phase 3)
+  reader_perspectives:
+    genre: "novel"         # 使用哪个视角模板：novel / webnovel_review / tutorial / general
+    weight: 0.1            # 视角评分占最终权重 (默认 0.1 = 10%)
+    # overrides:            # 可选：覆盖某个视角的 focus 等字段
+    #   - id: P-NO-01
+    #     focus:
+    #       - "替换的关注点"
+
   fix_agent: "reviser"

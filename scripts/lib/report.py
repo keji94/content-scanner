@@ -13,6 +13,7 @@ def generate_report(
     project: str,
     content_id: str,
     check_mode: str = "full",
+    perspective_results: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Generate the final check report JSON.
 
@@ -23,6 +24,7 @@ def generate_report(
         project: Project name
         content_id: Chapter/content identifier
         check_mode: "full" or "quick" (Phase 1 only)
+        perspective_results: Phase 3 reader perspective results (optional)
 
     Returns:
         Complete report dict matching SKILL.md output format.
@@ -60,5 +62,13 @@ def generate_report(
             "deduction": score_result.get("deduction", 0),
         },
     }
+
+    # Add Phase 3 perspective review section if available
+    if perspective_results:
+        report["perspective_review"] = {
+            "perspectives": perspective_results,
+            "perspective_avg": score_result.get("perspective_avg"),
+            "perspective_weight": score_result.get("perspective_weight"),
+        }
 
     return report

@@ -4,7 +4,7 @@
 
 This project is a content scanning skill. When invoked, scan text content against configurable rules, produce a scored report, and optionally enter a fix loop.
 
-**Architecture**: Two-phase scanning — Phase 1 is deterministic Python scripts (zero LLM cost), Phase 2 is LLM semantic analysis per paragraph.
+**Architecture**: Three-phase scanning — Phase 1 is deterministic Python scripts (zero LLM cost), Phase 2 is LLM semantic analysis per paragraph, Phase 3 is multi-reader-perspective review.
 
 ## Prerequisites
 
@@ -122,6 +122,46 @@ python3 $SCRIPTS_DIR/update_context.py \
 
 - Collect LLM violations into `llm_violations[]`
 
+### Step 3.5: Phase 3 Multi-Perspective Review
+
+#### 3.5a. Prepare perspectives
+
+```bash
+python3 $SCRIPTS_DIR/run_perspectives.py \
+  --config <workspace_path>/context/domain-config.yaml \
+  --genre <genre> \
+  --default-perspectives <project_root>/perspectives/default-perspectives.yaml
+```
+
+Save stdout to `$TMP/perspectives.json`
+
+#### 3.5b. Execute perspective review
+
+Read `$TMP/perspectives.json` to get the 3 reader perspectives and `weight`.
+
+Using **your own LLM reasoning**, review the **full article** (not paragraph-by-paragraph) from each perspective:
+
+For each perspective:
+1. Adopt the persona described in `avatar`
+2. Focus evaluation on the `focus` areas
+3. Ignore concerns listed in `anti_focus`
+4. Output a JSON object:
+```json
+{
+  "perspective_id": "P-WR-01",
+  "perspective_name": "网文老读者",
+  "score": 7,
+  "verdict": "one-line summary from this reader's standpoint",
+  "likes": ["what this reader would appreciate"],
+  "dislikes": ["what this reader would complain about"],
+  "suggestions": ["specific improvement suggestions from this perspective"]
+}
+```
+
+Scale: 1-10, where 7+ means this reader would recommend the article.
+
+Save all 3 perspective results to `$TMP/perspective_results.json`
+
 ### Step 4: Merge & Score
 
 Merge Phase 1 + Phase 2 violations into `$TMP/all_violations.json`, then:
@@ -129,7 +169,8 @@ Merge Phase 1 + Phase 2 violations into `$TMP/all_violations.json`, then:
 ```bash
 python3 $SCRIPTS_DIR/calculate_score.py \
   --violations $TMP/all_violations.json \
-  --config <workspace_path>/context/domain-config.yaml
+  --config <workspace_path>/context/domain-config.yaml \
+  --perspectives $TMP/perspective_results.json
 ```
 
 Save stdout to `$TMP/score.json`
@@ -142,6 +183,7 @@ python3 $SCRIPTS_DIR/generate_report.py \
   --score $TMP/score.json \
   --split $TMP/split.json \
   --config <workspace_path>/context/domain-config.yaml \
+  --perspectives $TMP/perspective_results.json \
   --project <project_name> \
   --content-id <content_id>
 ```
@@ -154,7 +196,7 @@ If score < convergence.score:
 1. Present findings to user
 2. On user approval, apply fixes (via fix_agent or inline editing)
 3. Identify which paragraphs were modified (diff the content)
-4. **Round 1**: Full re-scan (Steps 1-5)
+4. **Round 1**: Full re-scan (Steps 1-5, including Phase 3)
 5. **Round 2+**: Selective re-scan:
    - Phase 1: Always full re-scan (chapter-level statistics)
    - Phase 2: Only re-check `affected_paragraphs = modified ± 1`

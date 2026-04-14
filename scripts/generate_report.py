@@ -33,6 +33,8 @@ def main():
     parser.add_argument("--content-id", default="", help="Chapter/content identifier")
     parser.add_argument("--check-mode", default="full", choices=["full", "quick"],
                         help="Check mode")
+    parser.add_argument("--perspectives", default=None,
+                        help="Path to perspective_results JSON (Phase 3)")
     args = parser.parse_args()
 
     domain_config = load_config(args.config)
@@ -56,6 +58,15 @@ def main():
     # Ensure correlation groups are assigned
     compute_correlation_groups(violations, correlation_config)
 
+    # Load perspective results if available
+    perspective_results = None
+    if args.perspectives:
+        try:
+            with open(args.perspectives, "r", encoding="utf-8") as f:
+                perspective_results = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"WARNING: Could not load perspectives: {e}", file=sys.stderr)
+
     report = generate_report(
         violations=violations,
         score_result=score_result,
@@ -63,6 +74,7 @@ def main():
         project=args.project,
         content_id=args.content_id,
         check_mode=args.check_mode,
+        perspective_results=perspective_results,
     )
 
     json.dump(report, sys.stdout, ensure_ascii=False, indent=2)
