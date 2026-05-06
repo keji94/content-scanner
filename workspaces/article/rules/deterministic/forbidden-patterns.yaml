@@ -1,0 +1,182 @@
+# 禁止句式 + AIGC 痕迹检测（文章类型）
+# 对应 P0-01/03/07/08/09/10/11/13/17/18/19/35
+
+- id: D001
+  name: "段落末尾总结句"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(综上[，,]|所以[，,].*重要|总而言之|总得来说)"
+  message: "段落末尾不应加总结句，用过渡句引出下一段"
+  applies_to: [all]
+
+- id: D002
+  name: "禁止句式：不是...而是..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(不是[^。！？]{1,30}而是|并非[^。！？]{1,30}而是)"
+  message: "检测到「不是...而是...」句式，建议直接陈述或拆成两句"
+  applies_to: [all]
+
+- id: D003
+  name: "禁止句式：让...更加/更具..."
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "让[^。！？]{1,20}(更加|更具)"
+  message: "检测到「让...更加/更具...」句式，建议用直接因果表达"
+  applies_to: [all]
+
+- id: D004
+  name: "抽象概括收尾"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(体现了.*承载了|不仅体现了.*更承载了)"
+  message: "检测到抽象概括收尾，建议用具体事实收尾"
+  applies_to: [all]
+
+- id: D005
+  name: "AI高频词：值得注意的是/需要指出的是"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(值得注意|需要指出的是|值得一提的是|不可否认的是)"
+  message: "检测到 AI 高频铺垫词，建议直接说观点"
+  applies_to: [all]
+
+- id: D006
+  name: "AI总结词：综上所述/不难看出"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(综上所述|不难看出|归根结底|毫无疑问|显而易见|众所周知)"
+  message: "检测到 AI 总结套话，建议用更自然的收束方式"
+  applies_to: [all]
+
+- id: D007
+  name: "功能式动词堆砌"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(完成[^，,。！？]{1,15}(激发|促成|升华|推动|引领|赋能))"
+  message: "检测到功能式动词堆砌，建议用具体动作描述"
+  applies_to: [all]
+
+- id: D008
+  name: "对称排比超3项"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "([^。！？，,、]{2,10}[、，,][^。！？，,、]{2,10}[、，,][^。！？，,、]{2,10}[、，,][^。！？，,、]{2,10})"
+  message: "对称排比超过3项，第4项应换句式"
+  applies_to: [all]
+
+- id: D009
+  name: "连续同句式开头"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: statistical
+  metric: repeated_sentence_start
+  threshold: 3
+  comparison: greater_than
+  window: 3
+  message: "连续3段以上相同句式开头，应有变化"
+  applies_to: [all]
+
+- id: D010
+  name: "句长变化不足"
+  severity: suggestion
+  weight: 1
+  phase: 1
+  type: statistical
+  metric: sentence_length_std
+  threshold: 5.0
+  comparison: less_than
+  message: "句子长度标准差过小，句式节奏单一，建议长短句交替"
+  applies_to: [all]
+
+- id: D011
+  name: "连续同构定义句"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(\\*\\*[^*]{1,20}\\*\\*[—\\-][^\\n]*\\n.*\\*\\*[^*]{1,20}\\*\\*[—\\-][^\\n]*\\n.*\\*\\*[^*]{1,20}\\*\\*[—\\-])"
+  message: "连续3个以上同构定义句（**术语**——解释），建议混合句式"
+  applies_to: [all]
+
+- id: D012
+  name: "开头无钩子"
+  severity: critical
+  weight: 10
+  phase: 1
+  type: pattern
+  pattern: "^(今天(我们)?来聊聊|本文将介绍|这篇文章|在本文中|让我们来)"
+  message: "开头缺乏钩子，禁止「今天来聊聊」「本文将介绍」等弱开头"
+  applies_to: [all]
+
+- id: D013
+  name: "反问句过密"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: statistical
+  metric: rhetorical_question_count
+  threshold: 3
+  comparison: greater_than
+  message: "全文反问句/设问句超过3个，建议用陈述句过渡替代"
+  applies_to: [all]
+
+- id: D014
+  name: "泛概念短加粗"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "\\*\\*[^*]{1,8}\\*\\*"
+  message: "检测到8字以内泛概念词加粗，加粗应只用于标题、术语首次定义、引用出处"
+  applies_to: [all]
+
+- id: D015
+  name: "水平分割线"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "^(---+|\\*\\*\\*+|___+)$"
+  message: "禁止使用水平分割线（---/***），章节之间用标题层级自然分隔"
+  applies_to: [all]
+
+- id: D016
+  name: "词汇丰富度过低 (TTR)"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: statistical
+  metric: ttr
+  threshold: 0.45
+  comparison: less_than
+  message: "文本词汇丰富度(TTR)过低，用词重复率高，建议增加用词多样性"
+  applies_to: [all]
+
+- id: D017
+  name: "段落过长"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: length_check
+  threshold: 300
+  min_violations: 2
+  message: "段落超过300字，建议拆分"
+  applies_to: [all]

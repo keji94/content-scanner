@@ -1,0 +1,12 @@
+# 结构规则（文章类型）
+# 对应 P0-34 h2 数量规范
+
+- id: D018
+  name: "h2 数量超限"
+  severity: warning
+  weight: 3
+  phase: 1
+  type: pattern
+  pattern: "(^## [^#].*$[\\s\\S]*?){6,}"
+  message: "h2 标题超过5个，相似主题应聚合在 h2 下用 h3 区分"
+  applies_to: [deep-tutorial]

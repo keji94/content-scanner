@@ -1,0 +1,23 @@
+# 中文文章上下文源声明
+
+sources: []
+
+context_mapping:
+  static_fields: {}
+
+  cumulative_fields:
+    - name: key_facts
+      type: list
+      max_size: 30
+      update_strategy: append
+      confidence:
+        track: true
+        tentative_threshold: 0.7
+        correction_strategy: override
+
+    - name: main_arguments
+      type: list
+      max_size: 10
+      update_strategy: append
+      confidence:
+        track: false

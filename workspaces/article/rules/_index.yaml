@@ -1,0 +1,8 @@
+# 规则索引
+deterministic:
+  - forbidden-patterns.yaml
+  - structure.yaml
+llm:
+  - quality.yaml
+  - structure-and-flow.yaml
+learned: []
