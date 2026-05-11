@@ -240,19 +240,20 @@ def check_pattern_list(rule: dict, l1_units: list[dict],
     has_multi_sentence = any(".*" in p and len(p) > 15 for p in patterns)
 
     if has_multi_sentence:
-        # Full-text scope (e.g., D011 list patterns)
-        for pat in patterns:
-            if re.search(pat, full_text):
-                # Find approximate location
-                for l2 in l2_units:
-                    if re.search(pat, l2["text"]):
-                        violations.append(make_violation(
-                            rule, l2["index"], None, l2["text"]))
-                        break
-                else:
+        # Full-text scope (e.g., D011 list patterns, D039 cross-sentence patterns)
+        for l2 in l2_units:
+            for pat in patterns:
+                if re.search(pat, l2["text"]):
+                    violations.append(make_violation(
+                        rule, l2["index"], None, l2["text"]))
+                    break  # one violation per paragraph per rule
+        if not violations:
+            # Fallback: try against full text
+            for pat in patterns:
+                if re.search(pat, full_text):
                     violations.append(make_violation(
                         rule, None, None, full_text[:200]))
-                break  # one violation per rule
+                    break
     else:
         # Per-sentence scope (e.g., D008)
         seen = set()
